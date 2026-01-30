@@ -47,12 +47,12 @@ COLOR_DANGER = 0xED4245   # Red
 COLOR_GOLD = 0xFFD700     # Gold
 
 # --- Helper: Grade with AI ---
+# --- Helper: Grade with AI (DEBUG MODE) ---
 async def grade_submission(title, desc, code, lang):
     prompt = f"""
-    Role: Senior Computer Science Professor.
-    Task 1: Grade the code strictly based on correctness and efficiency.
-    Task 2: Detect AI generation (ChatGPT style).
-
+    Role: Computer Science Professor.
+    Task: Grade this code.
+    
     Question: {title}
     Description: {desc}
     Language: {lang}
@@ -62,20 +62,38 @@ async def grade_submission(title, desc, code, lang):
     OUTPUT JSON:
     {{
         "score": (0-100),
-        "feedback": "(Professional, constructive feedback. Max 2 sentences.)",
-        "status": "Pass" or "Fail",
+        "feedback": "(Short feedback)",
+        "status": "Pass",
         "is_ai_suspected": (true/false)
     }}
     """
     try:
-        # Using run_in_executor to prevent blocking the bot
+        # Run AI in a separate thread
         response = await asyncio.to_thread(model.generate_content, prompt)
         
+        # Check if AI refused to answer (Safety Filters)
         if not response.parts:
-            return {"score": 0, "feedback": "Code flagged by AI Safety filters.", "status": "Fail", "is_ai_suspected": False}
+            return {
+                "score": 0, 
+                "feedback": "⚠️ AI Refused to Grade (Safety Filter Triggered). Code might contain flagged keywords.", 
+                "status": "Fail", 
+                "is_ai_suspected": False
+            }
         
-        raw_text = response.text.replace("```json", "").replace("```", "").strip()
-        return json.loads(raw_text)
+        # Clean JSON (Remove markdown if present)
+        text = response.text.replace("```json", "").replace("```", "").strip()
+        return json.loads(text)
+
+    except Exception as e:
+        # 🚨 PRINT THE REAL ERROR TO DISCORD 🚨
+        error_msg = str(e)
+        print(f"❌ DEBUG ERROR: {error_msg}")
+        return {
+            "score": 0, 
+            "feedback": f"CRITICAL ERROR: {error_msg}", 
+            "status": "Fail", 
+            "is_ai_suspected": False
+        }
 
     except Exception as e:
         print(f"❌ AI ERROR: {e}")
@@ -341,3 +359,4 @@ async def global_leaderboard(ctx):
     await ctx.send(embed=embed)
 
 bot.run(TOKEN)
+
