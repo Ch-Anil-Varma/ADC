@@ -5,7 +5,7 @@ import os
 import google.generativeai as genai
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone # Updated import
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from keep_alive import keep_alive
@@ -40,11 +40,11 @@ QUESTIONS_CHANNEL_ID = 1466759973324329007
 LEADERBOARD_CHANNEL_ID = 1466759973324329008
 
 # --- UI COLORS ---
-COLOR_PRIMARY = 0x5865F2  # Discord Blurple
-COLOR_SUCCESS = 0x57F287  # Green
-COLOR_WARNING = 0xFEE75C  # Yellow
-COLOR_DANGER = 0xED4245   # Red
-COLOR_GOLD = 0xFFD700     # Gold
+COLOR_PRIMARY = 0x5865F2
+COLOR_SUCCESS = 0x57F287
+COLOR_WARNING = 0xFEE75C
+COLOR_DANGER = 0xED4245
+COLOR_GOLD = 0xFFD700
 
 # --- Helper: Grade with AI ---
 async def grade_submission(title, desc, code, lang):
@@ -118,7 +118,7 @@ async def update_live_leaderboard(question_id, guild):
         title=f"📊 Live Leaderboard: {question_data['title']}", 
         description=desc, 
         color=COLOR_GOLD,
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc) # Fixed Timezone
     )
     if bot.user.avatar:
         embed.set_thumbnail(url=bot.user.avatar.url)
@@ -134,7 +134,6 @@ async def update_live_leaderboard(question_id, guild):
 
 # --- UI: Code Submission Modal ---
 class CodeModal(ui.Modal, title="Submit Your Code"):
-    # INCREASED LENGTH TO 4000 (Discord Max)
     code_input = ui.TextInput(
         label="Paste Your Code Here", 
         style=discord.TextStyle.paragraph, 
@@ -155,7 +154,8 @@ class CodeModal(ui.Modal, title="Submit Your Code"):
         start_time = attempt_timers.get(timer_key)
         duration = 0
         if start_time:
-            duration = (datetime.utcnow() - start_time).total_seconds()
+            # Fixed Timezone Math
+            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
             if timer_key in attempt_timers: del attempt_timers[timer_key]
 
         # 2. Speed Trap (15s)
@@ -197,7 +197,7 @@ class CodeModal(ui.Modal, title="Submit Your Code"):
             "language": self.language,
             "duration_seconds": duration,
             "is_ai_flagged": is_ai_suspected,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc) # Fixed Timezone
         })
 
         if score > 0:
@@ -209,7 +209,7 @@ class CodeModal(ui.Modal, title="Submit Your Code"):
         
         mins, secs = int(duration // 60), int(duration % 60)
         
-        embed = discord.Embed(title=f"📝 Grading Result", color=color, timestamp=datetime.utcnow())
+        embed = discord.Embed(title=f"📝 Grading Result", color=color, timestamp=datetime.now(timezone.utc))
         embed.add_field(name="Score", value=f"**{score}/100**", inline=True)
         embed.add_field(name="Time", value=f"`{mins}m {secs}s`", inline=True)
         embed.add_field(name="Language", value=f"`{self.language}`", inline=True)
@@ -237,7 +237,8 @@ class LanguageSelect(ui.Select):
         self.desc = desc
 
     async def callback(self, interaction: discord.Interaction):
-        attempt_timers[f"{interaction.user.id}_{self.q_id}"] = datetime.utcnow()
+        # Fixed Timezone
+        attempt_timers[f"{interaction.user.id}_{self.q_id}"] = datetime.now(timezone.utc)
         
         q_data = questions_col.find_one({"_id": self.q_id})
         if not q_data or not q_data.get("active", False):
@@ -279,7 +280,7 @@ async def post(ctx, *, args):
             title=f"📊 Live Leaderboard: {title}", 
             description="*Waiting for submissions...* 🕒", 
             color=COLOR_GOLD,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
         if bot.user.avatar: embed.set_thumbnail(url=bot.user.avatar.url)
         leaderboard_msg = await lb_channel.send(embed=embed)
@@ -290,14 +291,14 @@ async def post(ctx, *, args):
         "description": description,
         "active": True,
         "leaderboard_msg_id": leaderboard_msg.id if leaderboard_msg else None,
-        "timestamp": datetime.utcnow()
+        "timestamp": datetime.now(timezone.utc)
     })
 
     # Question Post
     q_channel = bot.get_channel(QUESTIONS_CHANNEL_ID)
     role = discord.utils.get(ctx.guild.roles, name=STUDENT_ROLE_NAME)
     
-    embed = discord.Embed(title=f"📢 New Challenge: {title}", description=description, color=COLOR_PRIMARY, timestamp=datetime.utcnow())
+    embed = discord.Embed(title=f"📢 New Challenge: {title}", description=description, color=COLOR_PRIMARY, timestamp=datetime.now(timezone.utc))
     embed.add_field(name="⏳ Time Limit", value="24 Hours", inline=True)
     embed.add_field(name="🤖 AI Grading", value="Enabled", inline=True)
     embed.add_field(name="⚠️ Rules", value="• No Copy-Paste\n• No AI Generated Code", inline=False)
@@ -306,8 +307,12 @@ async def post(ctx, *, args):
 
     if q_channel:
         await q_channel.send(content=f"{role.mention}", embed=embed, view=QuestionView(question_id, title, description))
-        
-    await ctx.message.delete()
+    
+    # --- CRITICAL FIX: Safe Delete ---
+    try:
+        await ctx.message.delete()
+    except discord.Forbidden:
+        print("⚠️ Warning: Bot lacks 'Manage Messages' permission to delete the command.")
 
 @bot.command()
 async def global_leaderboard(ctx):
@@ -330,7 +335,7 @@ async def global_leaderboard(ctx):
     
     if count == 0: desc = "No data yet."
 
-    embed = discord.Embed(title="🏆 Hall of Fame (Top 50)", description=desc, color=discord.Color.purple(), timestamp=datetime.utcnow())
+    embed = discord.Embed(title="🏆 Hall of Fame (Top 50)", description=desc, color=discord.Color.purple(), timestamp=datetime.now(timezone.utc))
     if bot.user.avatar: embed.set_thumbnail(url=bot.user.avatar.url)
     
     await ctx.send(embed=embed)
