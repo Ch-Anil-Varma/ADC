@@ -1,0 +1,6 @@
+discord.py
+python-dotenv
+flask
+pymongo
+dnspython
+google-generativeai
