@@ -33,7 +33,7 @@ model = genai.GenerativeModel('gemini-1.5-flash', generation_config={"response_m
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION (YOUR IDS ADDED) ---
 LECTURER_ROLE_NAME = "Lecturer"
 STUDENT_ROLE_NAME = "Student"
 QUESTIONS_CHANNEL_ID = 1466759973324329007
@@ -110,7 +110,8 @@ async def update_live_leaderboard(question_id, guild):
 
 # --- UI: Code Submission Modal ---
 class CodeModal(ui.Modal, title="Submit Your Code"):
-    code_input = ui.TextInput(label="Paste Code Here", style=discord.TextStyle.paragraph, height=300)
+    # FIXED: Removed 'height=300' which was causing the crash
+    code_input = ui.TextInput(label="Paste Code Here", style=discord.TextStyle.paragraph)
 
     def __init__(self, language, question_id, title, desc):
         super().__init__()
