@@ -26,9 +26,10 @@ users_col = db["users"]
 # --- Global Cache for Timers ---
 attempt_timers = {}
 
-# --- AI Setup ---
+# --- AI Setup (FIXED: Switched to Stable Model) ---
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash', generation_config={"response_mime_type": "application/json"})
+# We use 'gemini-pro' which is universally available on the free tier
+model = genai.GenerativeModel('gemini-pro')
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -40,64 +41,53 @@ QUESTIONS_CHANNEL_ID = 1466759973324329007
 LEADERBOARD_CHANNEL_ID = 1466759973324329008
 
 # --- UI COLORS ---
-COLOR_PRIMARY = 0x5865F2  # Discord Blurple
-COLOR_SUCCESS = 0x57F287  # Green
-COLOR_WARNING = 0xFEE75C  # Yellow
-COLOR_DANGER = 0xED4245   # Red
-COLOR_GOLD = 0xFFD700     # Gold
+COLOR_PRIMARY = 0x5865F2
+COLOR_SUCCESS = 0x57F287
+COLOR_WARNING = 0xFEE75C
+COLOR_DANGER = 0xED4245
+COLOR_GOLD = 0xFFD700
 
-# --- Helper: Grade with AI ---
-# --- Helper: Grade with AI (DEBUG MODE) ---
+# --- Helper: Grade with AI (Stable) ---
 async def grade_submission(title, desc, code, lang):
     prompt = f"""
-    Role: Computer Science Professor.
-    Task: Grade this code.
-    
+    Role: Senior Computer Science Professor.
+    Task 1: Grade the code strictly based on correctness and efficiency.
+    Task 2: Detect AI generation (ChatGPT style).
+
     Question: {title}
     Description: {desc}
     Language: {lang}
     Code:
     {code}
 
-    OUTPUT JSON:
+    OUTPUT JSON ONLY:
     {{
         "score": (0-100),
-        "feedback": "(Short feedback)",
-        "status": "Pass",
+        "feedback": "(Professional, constructive feedback. Max 2 sentences.)",
+        "status": "Pass" or "Fail",
         "is_ai_suspected": (true/false)
     }}
     """
     try:
-        # Run AI in a separate thread
+        # Run in separate thread to prevent blocking
         response = await asyncio.to_thread(model.generate_content, prompt)
         
-        # Check if AI refused to answer (Safety Filters)
+        # Safety Check
         if not response.parts:
-            return {
-                "score": 0, 
-                "feedback": "⚠️ AI Refused to Grade (Safety Filter Triggered). Code might contain flagged keywords.", 
-                "status": "Fail", 
-                "is_ai_suspected": False
-            }
+            return {"score": 0, "feedback": "Code blocked by Safety Filters.", "status": "Fail", "is_ai_suspected": False}
         
-        # Clean JSON (Remove markdown if present)
-        text = response.text.replace("```json", "").replace("```", "").strip()
-        return json.loads(text)
-
-    except Exception as e:
-        # 🚨 PRINT THE REAL ERROR TO DISCORD 🚨
-        error_msg = str(e)
-        print(f"❌ DEBUG ERROR: {error_msg}")
-        return {
-            "score": 0, 
-            "feedback": f"CRITICAL ERROR: {error_msg}", 
-            "status": "Fail", 
-            "is_ai_suspected": False
-        }
+        # Manual JSON Cleaning (Crucial for gemini-pro)
+        raw_text = response.text
+        if "```json" in raw_text:
+            raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in raw_text:
+            raw_text = raw_text.split("```")[1].split("```")[0].strip()
+            
+        return json.loads(raw_text)
 
     except Exception as e:
         print(f"❌ AI ERROR: {e}")
-        return {"score": 0, "feedback": "System Error. Please notify the Lecturer.", "status": "Fail", "is_ai_suspected": False}
+        return {"score": 0, "feedback": f"System Error: {str(e)[:50]}...", "status": "Fail", "is_ai_suspected": False}
 
 # --- Helper: Update Live Leaderboard ---
 async def update_live_leaderboard(question_id, guild):
@@ -154,7 +144,6 @@ async def update_live_leaderboard(question_id, guild):
 
 # --- UI: Code Submission Modal ---
 class CodeModal(ui.Modal, title="Submit Your Code"):
-    # INCREASED LENGTH TO 4000 (Discord Max)
     code_input = ui.TextInput(
         label="Paste Your Code Here", 
         style=discord.TextStyle.paragraph, 
@@ -326,11 +315,10 @@ async def post(ctx, *, args):
     if q_channel:
         await q_channel.send(content=f"{role.mention}", embed=embed, view=QuestionView(question_id, title, description))
     
-    # --- CRITICAL FIX: Safe Delete ---
     try:
         await ctx.message.delete()
     except discord.Forbidden:
-        print("⚠️ Warning: Bot lacks 'Manage Messages' permission to delete the command.")
+        print("⚠️ Warning: Bot lacks 'Manage Messages' permission.")
 
 @bot.command()
 async def global_leaderboard(ctx):
@@ -359,4 +347,3 @@ async def global_leaderboard(ctx):
     await ctx.send(embed=embed)
 
 bot.run(TOKEN)
-
