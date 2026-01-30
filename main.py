@@ -5,7 +5,7 @@ import os
 import google.generativeai as genai
 import asyncio
 import json
-from datetime import datetime, timedelta, timezone # Updated import
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from keep_alive import keep_alive
@@ -40,11 +40,11 @@ QUESTIONS_CHANNEL_ID = 1466759973324329007
 LEADERBOARD_CHANNEL_ID = 1466759973324329008
 
 # --- UI COLORS ---
-COLOR_PRIMARY = 0x5865F2
-COLOR_SUCCESS = 0x57F287
-COLOR_WARNING = 0xFEE75C
-COLOR_DANGER = 0xED4245
-COLOR_GOLD = 0xFFD700
+COLOR_PRIMARY = 0x5865F2  # Discord Blurple
+COLOR_SUCCESS = 0x57F287  # Green
+COLOR_WARNING = 0xFEE75C  # Yellow
+COLOR_DANGER = 0xED4245   # Red
+COLOR_GOLD = 0xFFD700     # Gold
 
 # --- Helper: Grade with AI ---
 async def grade_submission(title, desc, code, lang):
@@ -68,7 +68,9 @@ async def grade_submission(title, desc, code, lang):
     }}
     """
     try:
-        response = await model.generate_content_async(prompt)
+        # Using run_in_executor to prevent blocking the bot
+        response = await asyncio.to_thread(model.generate_content, prompt)
+        
         if not response.parts:
             return {"score": 0, "feedback": "Code flagged by AI Safety filters.", "status": "Fail", "is_ai_suspected": False}
         
@@ -118,7 +120,7 @@ async def update_live_leaderboard(question_id, guild):
         title=f"📊 Live Leaderboard: {question_data['title']}", 
         description=desc, 
         color=COLOR_GOLD,
-        timestamp=datetime.now(timezone.utc) # Fixed Timezone
+        timestamp=datetime.now(timezone.utc)
     )
     if bot.user.avatar:
         embed.set_thumbnail(url=bot.user.avatar.url)
@@ -134,6 +136,7 @@ async def update_live_leaderboard(question_id, guild):
 
 # --- UI: Code Submission Modal ---
 class CodeModal(ui.Modal, title="Submit Your Code"):
+    # INCREASED LENGTH TO 4000 (Discord Max)
     code_input = ui.TextInput(
         label="Paste Your Code Here", 
         style=discord.TextStyle.paragraph, 
@@ -154,7 +157,6 @@ class CodeModal(ui.Modal, title="Submit Your Code"):
         start_time = attempt_timers.get(timer_key)
         duration = 0
         if start_time:
-            # Fixed Timezone Math
             duration = (datetime.now(timezone.utc) - start_time).total_seconds()
             if timer_key in attempt_timers: del attempt_timers[timer_key]
 
@@ -197,7 +199,7 @@ class CodeModal(ui.Modal, title="Submit Your Code"):
             "language": self.language,
             "duration_seconds": duration,
             "is_ai_flagged": is_ai_suspected,
-            "timestamp": datetime.now(timezone.utc) # Fixed Timezone
+            "timestamp": datetime.now(timezone.utc)
         })
 
         if score > 0:
@@ -224,7 +226,6 @@ class CodeModal(ui.Modal, title="Submit Your Code"):
 # --- UI: Language Select ---
 class LanguageSelect(ui.Select):
     def __init__(self, q_id, title, desc):
-        # UPDATED LANGUAGES
         options = [
             discord.SelectOption(label="C", value="C", emoji="🔹", description="Standard C"),
             discord.SelectOption(label="C++", value="C++", emoji="⚙️", description="Standard C++"),
@@ -237,7 +238,6 @@ class LanguageSelect(ui.Select):
         self.desc = desc
 
     async def callback(self, interaction: discord.Interaction):
-        # Fixed Timezone
         attempt_timers[f"{interaction.user.id}_{self.q_id}"] = datetime.now(timezone.utc)
         
         q_data = questions_col.find_one({"_id": self.q_id})
